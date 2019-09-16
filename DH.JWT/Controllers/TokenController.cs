@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DH.JWT.Token;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -30,6 +31,12 @@ namespace DH.JWT.Controllers
                 Pwd = pwd,
             };
             return Ok(tokenHelper.CreateToken(user));
+        }
+        [HttpPost]
+        [Authorize]
+        public IActionResult Post()
+        {
+            return Ok(tokenHelper.RefreshToken(Request.HttpContext.User));
         }
     }
 }

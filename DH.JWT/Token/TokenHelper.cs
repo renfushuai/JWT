@@ -10,6 +10,11 @@ using System.Threading.Tasks;
 
 namespace DH.JWT.Token
 {
+    public enum TokenType
+    {
+        AccessToken=1,
+        RefreshToken=2
+    }
     public class TokenHelper : ITokenHelper
     {
         private IOptions<JWTConfig> _options;
@@ -17,7 +22,17 @@ namespace DH.JWT.Token
         {
             _options = options;
         }
-        public Token CreateToken(SysUserer user)
+        public Token CreateAccessToken(SysUserer user)
+        {
+            Claim[] claims = new Claim[]
+            {
+                new Claim(ClaimTypes.NameIdentifier,user.Code),
+                new Claim(ClaimTypes.NameIdentifier,user.Name)
+
+            };
+            return CreateToken(claims,TokenType.AccessToken);
+        }
+        public ComplexToken CreateToken(SysUserer user)
         {
             Claim[] claims = new Claim[]
             {
@@ -27,19 +42,40 @@ namespace DH.JWT.Token
             };
             return CreateToken(claims);
         }
-        private Token CreateToken(Claim[] claims)
+        public ComplexToken CreateToken(Claim[] claims)
+        {
+            return new ComplexToken { AccessToken = CreateToken(claims,TokenType.AccessToken), RefreshToken = CreateToken(claims,TokenType.RefreshToken) };
+        }
+        private Token CreateToken(Claim[] claims,TokenType tokenType)
         {
             var now = DateTime.Now;
-            var expires = now.Add(TimeSpan.FromMinutes(_options.Value.AccessTokenExpiresMinutes));
+            var expires = now.Add(TimeSpan.FromMinutes(tokenType.Equals(TokenType.AccessToken)?_options.Value.AccessTokenExpiresMinutes:_options.Value.RefreshTokenExpiresMinutes));
             var token = new JwtSecurityToken(
                 issuer: _options.Value.Issuer,
-                audience: _options.Value.Audience,
+                audience: tokenType.Equals(TokenType.AccessToken) ? _options.Value.Audience : _options.Value.RefreshTokenAudience,
                 claims: claims,
                 notBefore: now,
                 expires: expires,
                 signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Value.IssuerSigningKey)),
                 SecurityAlgorithms.HmacSha256));
             return new Token { TokenContent = new JwtSecurityTokenHandler().WriteToken(token), Expires = expires };
+        }
+        public Token RefreshToken(ClaimsPrincipal claimsPrincipal)
+        {
+            var code = claimsPrincipal.Claims.FirstOrDefault(m => m.Type.Equals(ClaimTypes.NameIdentifier));
+            if (null != code)
+            {
+                SysUserer user = new SysUserer
+                {
+                    Code = code.Value.ToString(),
+                    Name = "renfushai",
+                };
+                return CreateAccessToken(user);
+            }
+            else
+            {
+                return null;
+            }
         }
     }
 }
