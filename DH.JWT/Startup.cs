@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using DH.JWT.Token;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -32,7 +33,11 @@ namespace DH.JWT
             Configuration.GetSection("JWT").Bind(config);
             #endregion
             //启用JWT
-            services.AddAuthentication(options =>
+            services
+            .AddAuthorization(options=> {
+                options.AddPolicy("Permission", policy => policy.Requirements.Add(new PolicyRequirement()));
+            })    
+            .AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -40,12 +45,27 @@ namespace DH.JWT
             {
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
+                    ValidateLifetime=true,//是否验证失效时间
                     ValidIssuer = config.Issuer,
                     ValidAudience = config.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config.IssuerSigningKey)),
-                    ClockSkew = TimeSpan.FromMinutes(1)//ClockSkew默认值为5分钟，它是一个缓冲期，例如Token设置有效期为30分钟，到了30分钟的时候是不会过期的，会有这么个缓冲时间，也就是35分钟才会过期。为了方便测试（不想等太长时间），这里我设置了1分钟
+                    ClockSkew = TimeSpan.FromMinutes(1),//ClockSkew默认值为5分钟，它是一个缓冲期，例如Token设置有效期为30分钟，到了30分钟的时候是不会过期的，会有这么个缓冲时间，也就是35分钟才会过期。为了方便测试（不想等太长时间），这里我设置了1分钟
+                  
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnAuthenticationFailed = context =>
+                    {
+                        if (context.Exception.GetType()==typeof(SecurityTokenExpiredException))
+                        {
+                            context.Response.Headers.Add("Token-Expired", "true");
+                        }
+                        return Task.CompletedTask;
+                    }
                 };
             });
+            //注入授权Handler
+            services.AddSingleton<IAuthorizationHandler, PolicyHandler>();
             services.AddSingleton<ITokenHelper,TokenHelper>();
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
         }

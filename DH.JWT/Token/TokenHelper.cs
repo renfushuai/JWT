@@ -37,7 +37,7 @@ namespace DH.JWT.Token
             Claim[] claims = new Claim[]
             {
                 new Claim(ClaimTypes.NameIdentifier,user.Code),
-                new Claim(ClaimTypes.NameIdentifier,user.Name)
+                new Claim(ClaimTypes.Name,user.Name)
 
             };
             return CreateToken(claims);
